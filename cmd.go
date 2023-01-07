@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
@@ -13,7 +14,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	gtypes "github.com/gitopia/gitopia/x/gitopia/types"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func initClientConfig() {
@@ -50,4 +53,40 @@ func CommandInit(cmd *cobra.Command, appName string) error {
 		WithInput(os.Stdin)
 	// sets global flags for keys subcommand
 	return client.SetCmdClientContext(cmd, clientCtx)
+}
+
+func GetClientContext(cmd *cobra.Command) (client.Context, error) {
+	clientCtx := client.GetClientContextFromCmd(cmd)
+	clientCtx = clientCtx.WithChainID(viper.GetString("chain_id"))
+	clientCtx = clientCtx.WithNodeURI(viper.GetString("tm_addr"))
+	c, err := client.NewClientFromNode(clientCtx.NodeURI)
+	if err != nil {
+		return clientCtx, errors.Wrap(err, "error creatig tm client")
+	}
+	clientCtx = clientCtx.WithClient(c)
+	clientCtx = clientCtx.WithBroadcastMode(flags.BroadcastSync)
+	clientCtx = clientCtx.WithSkipConfirmation(true)
+
+	backend, err := cmd.Flags().GetString(flags.FlagKeyringBackend)
+	if err != nil {
+		return clientCtx, errors.Wrap(err, "error parsing keyring backend")
+	}
+	kr, err := client.NewKeyringFromBackend(clientCtx, backend)
+	if err != nil {
+		return clientCtx, errors.Wrap(err, "error creating keyring backend")
+	}
+	clientCtx = clientCtx.WithKeyring(kr)
+	clientCtx = clientCtx.WithKeyringDir(viper.GetString("keyring_dir"))
+
+	from, err := cmd.Flags().GetString(flags.FlagFrom)
+	if err != nil {
+		return clientCtx, errors.Wrap(err, "error parsing from flag")
+	}
+	fromAddr, fromName, _, err := client.GetFromFields(clientCtx, kr, from)
+	if err != nil {
+		return clientCtx, errors.Wrap(err, "error parsing from Addr")
+	}
+
+	clientCtx = clientCtx.WithFrom(from).WithFromAddress(fromAddr).WithFromName(fromName)
+	return clientCtx, nil
 }
