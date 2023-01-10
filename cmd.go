@@ -35,12 +35,6 @@ func CommandInit(cmd *cobra.Command, appName string) error {
 	std.RegisterInterfaces(interfaceRegistry)
 	cryptocodec.RegisterInterfaces(interfaceRegistry)
 	authtypes.RegisterInterfaces(interfaceRegistry)
-	interfaceRegistry.RegisterInterface(
-		"cosmos.auth.v1beta1.AccountI",
-		(*authtypes.AccountI)(nil),
-		&authtypes.BaseAccount{},
-		&authtypes.ModuleAccount{},
-	)
 	gtypes.RegisterInterfaces(interfaceRegistry)
 
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
