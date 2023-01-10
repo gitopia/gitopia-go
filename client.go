@@ -79,8 +79,8 @@ func (g Client) QueryClient() types.QueryClient {
 	return g.qc
 }
 
-func (g Client) Address() string {
-	return g.cc.FromAddress.String()
+func (g Client) Address() sdk.AccAddress {
+	return g.cc.FromAddress
 }
 
 func (g Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg) error {
