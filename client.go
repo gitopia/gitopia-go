@@ -13,7 +13,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/authz"
-	"github.com/gitopia/git-server/logger"
+	"github.com/gitopia/gitopia-go/logger"
 	"github.com/gitopia/gitopia/x/gitopia/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
