@@ -51,8 +51,8 @@ func CommandInit(cmd *cobra.Command, appName string) error {
 
 func GetClientContext(cmd *cobra.Command) (client.Context, error) {
 	clientCtx := client.GetClientContextFromCmd(cmd)
-	clientCtx = clientCtx.WithChainID(viper.GetString("chain_id"))
-	clientCtx = clientCtx.WithNodeURI(viper.GetString("tm_addr"))
+	clientCtx = clientCtx.WithChainID(viper.GetString("CHAIN_ID"))
+	clientCtx = clientCtx.WithNodeURI(viper.GetString("TM_ADDR"))
 	c, err := client.NewClientFromNode(clientCtx.NodeURI)
 	if err != nil {
 		return clientCtx, errors.Wrap(err, "error creatig tm client")
@@ -70,7 +70,7 @@ func GetClientContext(cmd *cobra.Command) (client.Context, error) {
 		return clientCtx, errors.Wrap(err, "error creating keyring backend")
 	}
 	clientCtx = clientCtx.WithKeyring(kr)
-	clientCtx = clientCtx.WithKeyringDir(viper.GetString("keyring_dir"))
+	clientCtx = clientCtx.WithKeyringDir(viper.GetString("WORKING_DIR"))
 
 	from, err := cmd.Flags().GetString(flags.FlagFrom)
 	if err != nil {

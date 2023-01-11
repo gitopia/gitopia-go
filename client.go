@@ -44,9 +44,9 @@ func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, 
 	w := logger.FromContext(ctx).WriterLevel(logrus.DebugLevel)
 	cc = cc.WithOutput(w)
 
-	txf = txf.WithGasPrices(viper.GetString("gas_prices")).WithGasAdjustment(GAS_ADJUSTMENT)
+	txf = txf.WithGasPrices(viper.GetString("GAS_PRICES")).WithGasAdjustment(GAS_ADJUSTMENT)
 
-	grpcConn, err := grpc.Dial(viper.GetString("gitopia_grpc_url"),
+	grpcConn, err := grpc.Dial(viper.GetString("GITOPIA_ADDR"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.NewProtoCodec(nil).GRPCCodec())),
 	)
