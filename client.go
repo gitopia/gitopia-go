@@ -21,6 +21,8 @@ import (
 	rpcclient "github.com/tendermint/tendermint/rpc/client"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
+	jsonrpcclient "github.com/tendermint/tendermint/rpc/jsonrpc/client"
+	jsonrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -30,6 +32,9 @@ const (
 	GAS_ADJUSTMENT             = 1.5
 	MAX_TRIES                  = 5
 	MAX_WAIT_BLOCKS            = 10
+	TM_WS_ENDPOINT             = "/websocket"
+	TM_WS_PING_PERIOD          = 10 * time.Second
+	TM_WS_MAX_RECONNECT        = 3
 )
 
 type Client struct {
@@ -37,8 +42,11 @@ type Client struct {
 	txf tx.Factory
 	qc  types.QueryClient
 	rc  rpcclient.Client
+	wsc *jsonrpcclient.WSClient
 	w   *io.PipeWriter
 }
+
+type evenHandlerFunc func(context.Context, []byte) error
 
 func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, error) {
 	w := logger.FromContext(ctx).WriterLevel(logrus.DebugLevel)
@@ -56,9 +64,20 @@ func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, 
 
 	qc := types.NewQueryClient(grpcConn)
 
-	rc, err := rpchttp.New(cc.NodeURI, "/websocket")
+	rc, err := rpchttp.New(cc.NodeURI, TM_WS_ENDPOINT)
 	if err != nil {
 		return Client{}, errors.Wrap(err, "error creating rpc client")
+	}
+
+	wsc, err := jsonrpcclient.NewWS(viper.GetString("TM_ADDR"), TM_WS_ENDPOINT,
+		jsonrpcclient.PingPeriod(TM_WS_PING_PERIOD),
+		jsonrpcclient.MaxReconnectAttempts(TM_WS_MAX_RECONNECT))
+	if err != nil {
+		return Client{}, errors.Wrap(err, "error creating ws client")
+	}
+	err = wsc.Start()
+	if err != nil {
+		return Client{}, errors.Wrap(err, "error connecting to WS")
 	}
 
 	return Client{
@@ -66,6 +85,7 @@ func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, 
 		txf: txf,
 		qc:  qc,
 		rc:  rc,
+		wsc: wsc,
 		w:   w,
 	}, nil
 }
@@ -219,4 +239,49 @@ func (g Client) waitForTx(ctx context.Context, hash string) (*ctypes.ResultTx, e
 	}
 
 	return nil, fmt.Errorf("max block wait exceeded")
+}
+
+// processes events from tm
+// returns error on failure
+// returns error when event handler returns error
+func (g Client) Subscribe(ctx context.Context, q string, h evenHandlerFunc) (<-chan struct{}, chan error) {
+	e := make(chan error)
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		defer cancel()
+		err := g.wsc.Subscribe(ctx, q)
+		if err != nil {
+			e <- errors.Wrap(err, "error sending subscribe request")
+			return
+		}
+		for {
+			var event jsonrpctypes.RPCResponse
+			select {
+			case event = <-g.wsc.ResponsesCh:
+			case <-g.wsc.Quit():
+				e <- errors.New("ws conn closed")
+				return
+			}
+			if event.Error != nil {
+				e <- errors.Wrap(event.Error, "error reading from ws")
+				return
+			}
+
+			jsonBuf, err := event.Result.MarshalJSON()
+			if err != nil {
+				e <- errors.Wrap(err, "error parsing result")
+				return
+			}
+			// hack: TM sends empty event to begin with. skipping
+			if string(jsonBuf) == "{}" {
+				logger.FromContext(ctx).Info("received empty event. continuing...")
+				continue
+			}
+			err = h(ctx, jsonBuf)
+			if err != nil {
+				logger.FromContext(ctx).Error(errors.WithMessage(err, "error from event handler"))
+			}
+		}
+	}()
+	return ctx.Done(), e
 }
