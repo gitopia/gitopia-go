@@ -42,11 +42,13 @@ type Client struct {
 	txf tx.Factory
 	qc  types.QueryClient
 	rc  rpcclient.Client
-	wsc *jsonrpcclient.WSClient
 	w   *io.PipeWriter
 }
 
 type evenHandlerFunc func(context.Context, []byte) error
+type WSClient struct {
+	*jsonrpcclient.WSClient
+}
 
 func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, error) {
 	w := logger.FromContext(ctx).WriterLevel(logrus.DebugLevel)
@@ -69,23 +71,11 @@ func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, 
 		return Client{}, errors.Wrap(err, "error creating rpc client")
 	}
 
-	wsc, err := jsonrpcclient.NewWS(viper.GetString("TM_ADDR"), TM_WS_ENDPOINT,
-		jsonrpcclient.PingPeriod(TM_WS_PING_PERIOD),
-		jsonrpcclient.MaxReconnectAttempts(TM_WS_MAX_RECONNECT))
-	if err != nil {
-		return Client{}, errors.Wrap(err, "error creating ws client")
-	}
-	err = wsc.Start()
-	if err != nil {
-		return Client{}, errors.Wrap(err, "error connecting to WS")
-	}
-
 	return Client{
 		cc:  cc,
 		txf: txf,
 		qc:  qc,
 		rc:  rc,
-		wsc: wsc,
 		w:   w,
 	}, nil
 }
@@ -241,15 +231,30 @@ func (g Client) waitForTx(ctx context.Context, hash string) (*ctypes.ResultTx, e
 	return nil, fmt.Errorf("max block wait exceeded")
 }
 
+func NewWSClient(ctx context.Context, cc client.Context, txf tx.Factory) (*WSClient, error) {
+	wsc, err := jsonrpcclient.NewWS(viper.GetString("TM_ADDR"), TM_WS_ENDPOINT,
+		jsonrpcclient.PingPeriod(TM_WS_PING_PERIOD),
+		jsonrpcclient.MaxReconnectAttempts(TM_WS_MAX_RECONNECT))
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating ws client")
+	}
+	err = wsc.Start()
+	if err != nil {
+		return nil, errors.Wrap(err, "error connecting to WS")
+	}
+
+	return &WSClient{wsc}, nil
+}
+
 // processes events from tm
 // returns error on failure
 // returns error when event handler returns error
-func (g Client) Subscribe(ctx context.Context, q string, h evenHandlerFunc) (<-chan struct{}, chan error) {
+func (wsc *WSClient) SubscribeToEvents(ctx context.Context, q string, h evenHandlerFunc) (<-chan struct{}, chan error) {
 	e := make(chan error)
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		defer cancel()
-		err := g.wsc.Subscribe(ctx, q)
+		err := wsc.Subscribe(ctx, q)
 		if err != nil {
 			e <- errors.Wrap(err, "error sending subscribe request")
 			return
@@ -257,8 +262,8 @@ func (g Client) Subscribe(ctx context.Context, q string, h evenHandlerFunc) (<-c
 		for {
 			var event jsonrpctypes.RPCResponse
 			select {
-			case event = <-g.wsc.ResponsesCh:
-			case <-g.wsc.Quit():
+			case event = <-wsc.ResponsesCh:
+			case <-wsc.Quit():
 				e <- errors.New("ws conn closed")
 				return
 			}
