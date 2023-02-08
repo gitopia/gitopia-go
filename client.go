@@ -235,7 +235,7 @@ func (g Client) waitForTx(ctx context.Context, hash string) (*ctypes.ResultTx, e
 	return nil, fmt.Errorf("max block wait exceeded")
 }
 
-func NewWSEvents(ctx context.Context, cc client.Context) (*WSEvents, error) {
+func NewWSEvents(ctx context.Context) (*WSEvents, error) {
 	wse := &WSEvents{}
 
 	var err error
