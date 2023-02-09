@@ -30,6 +30,7 @@ const (
 	GAS_ADJUSTMENT             = 1.5
 	MAX_TRIES                  = 5
 	MAX_WAIT_BLOCKS            = 10
+	TM_WS_ENDPOINT             = "/websocket"
 )
 
 type Client struct {
@@ -56,7 +57,7 @@ func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, 
 
 	qc := types.NewQueryClient(grpcConn)
 
-	rc, err := rpchttp.New(cc.NodeURI, "/websocket")
+	rc, err := rpchttp.New(cc.NodeURI, TM_WS_ENDPOINT)
 	if err != nil {
 		return Client{}, errors.Wrap(err, "error creating rpc client")
 	}
