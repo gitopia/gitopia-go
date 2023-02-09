@@ -88,7 +88,6 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 				// 	wse.subscribeAfter(1 * time.Second)
 				// }
 				// OnReconnect handles this
-				time.Sleep(1 * time.Second) // Re-tryable errors
 				continue
 			}
 
