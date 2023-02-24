@@ -77,6 +77,7 @@ func terminateOnCancel(ctx context.Context) error {
 // cancel context to stop processing
 // returns error on failure
 // returns error when event handler returns error
+// handler must handle all errors. it must return only fatal errors
 func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan struct{}, chan error) {
 	e := make(chan error)
 	done := make(chan struct{})
@@ -139,6 +140,8 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 			if err != nil {
 				logger.FromContext(ctx).Error(errors.WithMessage(err, "error from event handler"))
 				mTmError.With(prometheus.Labels{"error": "handler_error"}).Inc()
+				e <- err
+				return
 			}
 		}
 	}()
