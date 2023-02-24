@@ -54,14 +54,25 @@ func NewWSEvents(ctx context.Context, query string) (*WSEvents, error) {
 	return wse, nil
 }
 
+func terminateOnCancel(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	return nil
+}
+
 // processes events from tm
+// cancel context to stop processing
 // returns error on failure
 // returns error when event handler returns error
 func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan struct{}, chan error) {
 	e := make(chan error)
-	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+
 	go func() {
-		defer cancel()
+		defer func() { close(done) }()
 		err := wse.wsc.Subscribe(ctx, wse.query)
 		if err != nil {
 			e <- errors.Wrap(err, "error sending subscribe request")
@@ -69,6 +80,11 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 		}
 
 		for {
+			err = terminateOnCancel(ctx)
+			if err != nil {
+				e <-  err
+				return
+			}
 			var event jsonrpctypes.RPCResponse
 			select {
 			case event = <-wse.wsc.ResponsesCh:
