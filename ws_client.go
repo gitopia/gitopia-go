@@ -6,6 +6,8 @@ import (
 
 	"github.com/gitopia/gitopia-go/logger"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/tendermint/tendermint/libs/log"
@@ -16,6 +18,14 @@ import (
 const (
 	TM_WS_PING_PERIOD   = 10 * time.Second
 	TM_WS_MAX_RECONNECT = 3
+)
+
+var (
+	mTmError = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: viper.GetString("APP_NAME"),
+		Name:      "tm_errors",
+		Help:      "Number of tm errors",
+	}, []string{"error"})
 )
 
 type evenHandlerFunc func(context.Context, []byte) error
@@ -73,16 +83,21 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 
 	go func() {
 		defer func() { close(done) }()
+		logger.FromContext(ctx).Debug("subscribing to tm")
+		defer logger.FromContext(ctx).Debug("subscription done")
+
 		err := wse.wsc.Subscribe(ctx, wse.query)
 		if err != nil {
 			e <- errors.Wrap(err, "error sending subscribe request")
 			return
 		}
 
+		//!! CAUTION!! all events are processed sequentially in order to support backfill!
+		// this might lead to event queue overflow on the chain and connection disconnection
 		for {
 			err = terminateOnCancel(ctx)
 			if err != nil {
-				e <-  err
+				e <- err
 				return
 			}
 			var event jsonrpctypes.RPCResponse
@@ -104,6 +119,7 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 				// 	wse.subscribeAfter(1 * time.Second)
 				// }
 				// OnReconnect handles this
+				mTmError.With(prometheus.Labels{"error": "ws_event_error"}).Inc()
 				continue
 			}
 
@@ -111,6 +127,7 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 			if err != nil {
 				logger.FromContext(ctx).WithError(err).WithField("result", event.Result).
 					Error("error parsing result. ignoring event")
+				mTmError.With(prometheus.Labels{"error": "parse_error"}).Inc()
 				continue
 			}
 			// hack: TM sends empty event to begin with. skipping
@@ -121,6 +138,7 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 			err = h(ctx, jsonBuf)
 			if err != nil {
 				logger.FromContext(ctx).Error(errors.WithMessage(err, "error from event handler"))
+				mTmError.With(prometheus.Labels{"error": "handler_error"}).Inc()
 			}
 		}
 	}()
