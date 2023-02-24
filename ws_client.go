@@ -93,8 +93,9 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 
 			jsonBuf, err := event.Result.MarshalJSON()
 			if err != nil {
-				e <- errors.Wrap(err, "error parsing result")
-				return
+				logger.FromContext(ctx).WithError(err).WithField("result", event.Result).
+					Error("error parsing result. ignoring event")
+				continue
 			}
 			// hack: TM sends empty event to begin with. skipping
 			if string(jsonBuf) == "{}" {
