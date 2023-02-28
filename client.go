@@ -47,15 +47,10 @@ func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, 
 
 	txf = txf.WithGasPrices(viper.GetString("GAS_PRICES")).WithGasAdjustment(GAS_ADJUSTMENT)
 
-	grpcConn, err := grpc.Dial(viper.GetString("GITOPIA_ADDR"),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.NewProtoCodec(nil).GRPCCodec())),
-	)
+	qc, err := GetQueryClient(viper.GetString("GITOPIA_ADDR"))
 	if err != nil {
-		return Client{}, errors.Wrap(err, "error creating grpc client")
+		return Client{}, errors.Wrap(err, "error creating query client")
 	}
-
-	qc := types.NewQueryClient(grpcConn)
 
 	rc, err := rpchttp.New(cc.NodeURI, TM_WS_ENDPOINT)
 	if err != nil {
@@ -69,6 +64,18 @@ func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, 
 		rc:  rc,
 		w:   w,
 	}, nil
+}
+
+func GetQueryClient(addr string) (types.QueryClient, error) {
+	grpcConn, err := grpc.Dial(addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.NewProtoCodec(nil).GRPCCodec())),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "error connecting to gitopia")
+	}
+
+	return types.NewQueryClient(grpcConn), nil
 }
 
 // implement io.Closer
