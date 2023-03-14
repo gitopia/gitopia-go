@@ -6,6 +6,8 @@ import (
 
 	"github.com/gitopia/gitopia-go/logger"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/tendermint/tendermint/libs/log"
@@ -16,6 +18,14 @@ import (
 const (
 	TM_WS_PING_PERIOD   = 10 * time.Second
 	TM_WS_MAX_RECONNECT = 3
+)
+
+var (
+	mTmError = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: viper.GetString("APP_NAME"),
+		Name:      "tm_errors",
+		Help:      "Number of tm errors",
+	}, []string{"error"})
 )
 
 type evenHandlerFunc func(context.Context, []byte) error
@@ -54,21 +64,43 @@ func NewWSEvents(ctx context.Context, query string) (*WSEvents, error) {
 	return wse, nil
 }
 
+func terminateOnCancel(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	return nil
+}
+
 // processes events from tm
+// cancel context to stop processing
 // returns error on failure
 // returns error when event handler returns error
+// handler must handle all errors. it must return only fatal errors
 func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan struct{}, chan error) {
 	e := make(chan error)
-	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+
 	go func() {
-		defer cancel()
+		defer func() { close(done) }()
+		logger.FromContext(ctx).Debug("subscribing to tm")
+		defer logger.FromContext(ctx).Debug("subscription done")
+
 		err := wse.wsc.Subscribe(ctx, wse.query)
 		if err != nil {
 			e <- errors.Wrap(err, "error sending subscribe request")
 			return
 		}
 
+		//!! CAUTION!! all events are processed sequentially in order to support backfill!
+		// this might lead to event queue overflow on the chain and connection disconnection
 		for {
+			err = terminateOnCancel(ctx)
+			if err != nil {
+				e <- err
+				return
+			}
 			var event jsonrpctypes.RPCResponse
 			select {
 			case event = <-wse.wsc.ResponsesCh:
@@ -88,13 +120,16 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 				// 	wse.subscribeAfter(1 * time.Second)
 				// }
 				// OnReconnect handles this
+				mTmError.With(prometheus.Labels{"error": "ws_event_error"}).Inc()
 				continue
 			}
 
 			jsonBuf, err := event.Result.MarshalJSON()
 			if err != nil {
-				e <- errors.Wrap(err, "error parsing result")
-				return
+				logger.FromContext(ctx).WithError(err).WithField("result", event.Result).
+					Error("error parsing result. ignoring event")
+				mTmError.With(prometheus.Labels{"error": "parse_error"}).Inc()
+				continue
 			}
 			// hack: TM sends empty event to begin with. skipping
 			if string(jsonBuf) == "{}" {
@@ -104,6 +139,9 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 			err = h(ctx, jsonBuf)
 			if err != nil {
 				logger.FromContext(ctx).Error(errors.WithMessage(err, "error from event handler"))
+				mTmError.With(prometheus.Labels{"error": "handler_error"}).Inc()
+				e <- err
+				return
 			}
 		}
 	}()
