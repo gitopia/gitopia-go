@@ -107,6 +107,21 @@ func (g Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg) error {
 	return nil
 }
 
+func (g Client) BroadcastTxAndWait(ctx context.Context, msg sdk.Msg) error {
+	// !!HACK!! set sequence to 0 to force refresh account sequence for every txn
+	txHash, err := BroadcastTx(g.cc, g.txf.WithSequence(0), msg)
+	if err != nil {
+		return err
+	}
+
+	_, err = g.waitForTx(ctx, txHash)
+	if err != nil {
+		return errors.Wrap(err, "error waiting for tx")
+	}
+
+	return nil
+}
+
 // BroadcastTx attempts to generate, sign and broadcast a transaction with the
 // given set of messages.
 // It will return an error upon failure.
