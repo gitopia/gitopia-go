@@ -14,7 +14,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/authz"
 	"github.com/gitopia/gitopia-go/logger"
-	"github.com/gitopia/gitopia/x/gitopia/types"
+	gtypes "github.com/gitopia/gitopia/x/gitopia/types"
+	rtypes "github.com/gitopia/gitopia/x/rewards/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -33,12 +34,17 @@ const (
 	TM_WS_ENDPOINT             = "/websocket"
 )
 
+type Query struct {
+	Gitopia gtypes.QueryClient
+	Rewards rtypes.QueryClient
+}
 type Client struct {
 	cc  client.Context
 	txf tx.Factory
-	qc  types.QueryClient
-	rc  rpcclient.Client
-	w   *io.PipeWriter
+	rc rpcclient.Client
+	w  *io.PipeWriter
+
+	Query
 }
 
 func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, error) {
@@ -47,35 +53,38 @@ func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, 
 
 	txf = txf.WithGasPrices(viper.GetString("GAS_PRICES")).WithGasAdjustment(GAS_ADJUSTMENT)
 
-	qc, err := GetQueryClient(viper.GetString("GITOPIA_ADDR"))
-	if err != nil {
-		return Client{}, errors.Wrap(err, "error creating query client")
-	}
-
 	rc, err := rpchttp.New(cc.NodeURI, TM_WS_ENDPOINT)
 	if err != nil {
 		return Client{}, errors.Wrap(err, "error creating rpc client")
 	}
 
+	q, err := GetQueryClient(viper.GetString("GITOPIA_ADDR"))
+	if err != nil {
+		return Client{}, errors.Wrap(err, "error creating query client")
+	}
+
 	return Client{
 		cc:  cc,
 		txf: txf,
-		qc:  qc,
 		rc:  rc,
 		w:   w,
+
+		Query: q,
 	}, nil
 }
 
-func GetQueryClient(addr string) (types.QueryClient, error) {
+func GetQueryClient(addr string) (Query, error) {
 	grpcConn, err := grpc.Dial(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.NewProtoCodec(nil).GRPCCodec())),
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "error connecting to gitopia")
+		return Query{}, errors.Wrap(err, "error connecting to gitopia")
 	}
 
-	return types.NewQueryClient(grpcConn), nil
+	gqc := gtypes.NewQueryClient(grpcConn)
+	rqc := rtypes.NewQueryClient(grpcConn)
+	return Query{gqc, rqc}, nil
 }
 
 // implement io.Closer
@@ -83,8 +92,8 @@ func (g Client) Close() error {
 	return g.w.Close()
 }
 
-func (g Client) QueryClient() types.QueryClient {
-	return g.qc
+func (g Client) QueryClient() Query {
+	return g.Query
 }
 
 func (g Client) Address() sdk.AccAddress {
@@ -95,6 +104,21 @@ func (g Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg) error {
 	execMsg := authz.NewMsgExec(g.cc.FromAddress, []sdk.Msg{msg})
 	// !!HACK!! set sequence to 0 to force refresh account sequence for every txn
 	txHash, err := BroadcastTx(g.cc, g.txf.WithSequence(0), &execMsg)
+	if err != nil {
+		return err
+	}
+
+	_, err = g.waitForTx(ctx, txHash)
+	if err != nil {
+		return errors.Wrap(err, "error waiting for tx")
+	}
+
+	return nil
+}
+
+func (g Client) BroadcastTxAndWait(ctx context.Context, msg sdk.Msg) error {
+	// !!HACK!! set sequence to 0 to force refresh account sequence for every txn
+	txHash, err := BroadcastTx(g.cc, g.txf.WithSequence(0), msg)
 	if err != nil {
 		return err
 	}
