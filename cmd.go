@@ -86,5 +86,8 @@ func GetClientContext(cmd *cobra.Command) (client.Context, error) {
 	}
 
 	clientCtx = clientCtx.WithFrom(from).WithFromAddress(fromAddr).WithFromName(fromName)
+
+	feeGranterAddr := sdk.MustAccAddressFromBech32(viper.GetString("FEE_GRANTER_ADDR"))
+	clientCtx = clientCtx.WithFeeGranterAddress(feeGranterAddr)
 	return clientCtx, nil
 }
