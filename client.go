@@ -100,10 +100,16 @@ func (g Client) Address() sdk.AccAddress {
 	return g.cc.FromAddress
 }
 
-func (g Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg) error {
+func (g Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg, feePayer string) error {
 	execMsg := authz.NewMsgExec(g.cc.FromAddress, []sdk.Msg{msg})
+
+	addr, err := sdk.AccAddressFromBech32(feePayer)
+	if err != nil {
+		return err
+	}
+
 	// !!HACK!! set sequence to 0 to force refresh account sequence for every txn
-	txHash, err := BroadcastTx(g.cc, g.txf.WithSequence(0), &execMsg)
+	txHash, err := BroadcastTx(g.cc, g.txf.WithSequence(0).WithFeePayer(addr), &execMsg)
 	if err != nil {
 		return err
 	}
