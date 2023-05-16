@@ -41,8 +41,8 @@ type Query struct {
 type Client struct {
 	cc  client.Context
 	txf tx.Factory
-	rc rpcclient.Client
-	w  *io.PipeWriter
+	rc  rpcclient.Client
+	w   *io.PipeWriter
 
 	Query
 }
@@ -92,8 +92,8 @@ func (g Client) Close() error {
 	return g.w.Close()
 }
 
-func (g Client) QueryClient() Query {
-	return g.Query
+func (g Client) QueryClient() *Query {
+	return &g.Query
 }
 
 func (g Client) Address() sdk.AccAddress {
