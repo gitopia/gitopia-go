@@ -1,16 +1,16 @@
 module github.com/gitopia/gitopia-go
 
-go 1.18
+go 1.19
 
 require (
-	github.com/cosmos/cosmos-sdk v0.46.10
-	github.com/gitopia/gitopia v1.4.0-rc.0.20230328182904-1fec358ff98b
+	github.com/cosmos/cosmos-sdk v0.46.12
+	github.com/gitopia/gitopia/v2 v2.0.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.13.0
-	github.com/tendermint/tendermint v0.34.26
+	github.com/tendermint/tendermint v0.34.27
 	google.golang.org/grpc v1.53.0
 )
 
@@ -51,7 +51,7 @@ require (
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/btree v1.0.1 // indirect
+	github.com/google/btree v1.1.2 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
@@ -123,4 +123,4 @@ require (
 
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 
-replace github.com/tendermint/tendermint => github.com/informalsystems/tendermint v0.34.26
+replace github.com/tendermint/tendermint => github.com/cometbft/cometbft v0.34.27
