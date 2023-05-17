@@ -119,7 +119,7 @@ func (c Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg) error {
 
 func (c Client) BroadcastTxAndWait(ctx context.Context, msg sdk.Msg) error {
 	// !!HACK!! set sequence to 0 to force refresh account sequence for every txn
-	txHash, err := BroadcastTx(c.cc, c.txf.WithSequence(0), msg)
+	txHash, err := BroadcastTx(c.cc, c.txf.WithSequence(0).WithFeePayer(c.Address()), msg)
 	if err != nil {
 		return err
 	}
