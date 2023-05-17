@@ -13,9 +13,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	gtypes "github.com/gitopia/gitopia/x/gitopia/types"
-	rtypes "github.com/gitopia/gitopia/x/rewards/types"
-	otypes "github.com/gitopia/gitopia/x/offchain/types"
+	gtypes "github.com/gitopia/gitopia/v2/x/gitopia/types"
+	rtypes "github.com/gitopia/gitopia/v2/x/rewards/types"
+	otypes "github.com/gitopia/gitopia/v2/x/offchain/types"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -86,5 +86,8 @@ func GetClientContext(cmd *cobra.Command) (client.Context, error) {
 	}
 
 	clientCtx = clientCtx.WithFrom(from).WithFromAddress(fromAddr).WithFromName(fromName)
+
+	feeGranterAddr := sdk.MustAccAddressFromBech32(viper.GetString("FEE_GRANTER_ADDR"))
+	clientCtx = clientCtx.WithFeeGranterAddress(feeGranterAddr)
 	return clientCtx, nil
 }

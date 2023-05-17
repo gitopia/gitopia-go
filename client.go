@@ -14,8 +14,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/authz"
 	"github.com/gitopia/gitopia-go/logger"
-	gtypes "github.com/gitopia/gitopia/x/gitopia/types"
-	rtypes "github.com/gitopia/gitopia/x/rewards/types"
+	gtypes "github.com/gitopia/gitopia/v2/x/gitopia/types"
+	rtypes "github.com/gitopia/gitopia/v2/x/rewards/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -41,8 +41,8 @@ type Query struct {
 type Client struct {
 	cc  client.Context
 	txf tx.Factory
-	rc rpcclient.Client
-	w  *io.PipeWriter
+	rc  rpcclient.Client
+	w   *io.PipeWriter
 
 	Query
 }
@@ -88,27 +88,28 @@ func GetQueryClient(addr string) (Query, error) {
 }
 
 // implement io.Closer
-func (g Client) Close() error {
-	return g.w.Close()
+func (c Client) Close() error {
+	return c.w.Close()
 }
 
-func (g Client) QueryClient() Query {
-	return g.Query
+func (c Client) QueryClient() *Query {
+	return &c.Query
 }
 
-func (g Client) Address() sdk.AccAddress {
-	return g.cc.FromAddress
+func (c Client) Address() sdk.AccAddress {
+	return c.cc.FromAddress
 }
 
-func (g Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg) error {
-	execMsg := authz.NewMsgExec(g.cc.FromAddress, []sdk.Msg{msg})
+func (c Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg) error {
+	execMsg := authz.NewMsgExec(c.cc.FromAddress, []sdk.Msg{msg})
+
 	// !!HACK!! set sequence to 0 to force refresh account sequence for every txn
-	txHash, err := BroadcastTx(g.cc, g.txf.WithSequence(0), &execMsg)
+	txHash, err := BroadcastTx(c.cc, c.txf.WithSequence(0).WithFeePayer(c.Address()), &execMsg)
 	if err != nil {
 		return err
 	}
 
-	_, err = g.waitForTx(ctx, txHash)
+	_, err = c.waitForTx(ctx, txHash)
 	if err != nil {
 		return errors.Wrap(err, "error waiting for tx")
 	}
@@ -116,14 +117,14 @@ func (g Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg) error {
 	return nil
 }
 
-func (g Client) BroadcastTxAndWait(ctx context.Context, msg sdk.Msg) error {
+func (c Client) BroadcastTxAndWait(ctx context.Context, msg sdk.Msg) error {
 	// !!HACK!! set sequence to 0 to force refresh account sequence for every txn
-	txHash, err := BroadcastTx(g.cc, g.txf.WithSequence(0), msg)
+	txHash, err := BroadcastTx(c.cc, c.txf.WithSequence(0), msg)
 	if err != nil {
 		return err
 	}
 
-	_, err = g.waitForTx(ctx, txHash)
+	_, err = c.waitForTx(ctx, txHash)
 	if err != nil {
 		return errors.Wrap(err, "error waiting for tx")
 	}
@@ -172,13 +173,13 @@ func BroadcastTx(clientCtx client.Context, txf tx.Factory, msgs ...sdk.Msg) (str
 }
 
 // Status returns the node Status
-func (g Client) Status(ctx context.Context) (*ctypes.ResultStatus, error) {
-	return g.rc.Status(ctx)
+func (c Client) Status(ctx context.Context) (*ctypes.ResultStatus, error) {
+	return c.rc.Status(ctx)
 }
 
 // latestBlockHeight returns the lastest block height of the app.
-func (g Client) latestBlockHeight(ctx context.Context) (int64, error) {
-	resp, err := g.Status(ctx)
+func (c Client) latestBlockHeight(ctx context.Context) (int64, error) {
+	resp, err := c.Status(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -188,28 +189,28 @@ func (g Client) latestBlockHeight(ctx context.Context) (int64, error) {
 // waitForNextBlock waits until next block is committed.
 // It reads the current block height and then waits for another block to be
 // committed, or returns an error if ctx is canceled.
-func (g Client) waitForNextBlock(ctx context.Context) error {
-	return g.waitForNBlocks(ctx, 1)
+func (c Client) waitForNextBlock(ctx context.Context) error {
+	return c.waitForNBlocks(ctx, 1)
 }
 
 // waitForNBlocks reads the current block height and then waits for anothers n
 // blocks to be committed, or returns an error if ctx is canceled.
-func (g Client) waitForNBlocks(ctx context.Context, n int64) error {
-	start, err := g.latestBlockHeight(ctx)
+func (c Client) waitForNBlocks(ctx context.Context, n int64) error {
+	start, err := c.latestBlockHeight(ctx)
 	if err != nil {
 		return err
 	}
-	return g.waitForBlockHeight(ctx, start+n)
+	return c.waitForBlockHeight(ctx, start+n)
 }
 
 // waitForBlockHeight waits until block height h is committed, or returns an
 // error if ctx is canceled.
-func (g Client) waitForBlockHeight(ctx context.Context, h int64) error {
+func (c Client) waitForBlockHeight(ctx context.Context, h int64) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for i := 0; i < MAX_TRIES; i++ {
-		latestHeight, err := g.latestBlockHeight(ctx)
+		latestHeight, err := c.latestBlockHeight(ctx)
 		if err != nil {
 			return err
 		}
@@ -228,17 +229,17 @@ func (g Client) waitForBlockHeight(ctx context.Context, h int64) error {
 
 // waitForTx requests the tx from hash, if not found, waits for next block and
 // tries again. Returns an error if ctx is canceled.
-func (g Client) waitForTx(ctx context.Context, hash string) (*ctypes.ResultTx, error) {
+func (c Client) waitForTx(ctx context.Context, hash string) (*ctypes.ResultTx, error) {
 	bz, err := hex.DecodeString(hash)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to decode tx hash '%s'", hash)
 	}
 	for i := 0; i < MAX_WAIT_BLOCKS; i++ {
-		resp, err := g.rc.Tx(ctx, bz, false)
+		resp, err := c.rc.Tx(ctx, bz, false)
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
 				// Tx not found, wait for next block and try again
-				err := g.waitForNextBlock(ctx)
+				err := c.waitForNextBlock(ctx)
 				if err != nil {
 					return nil, errors.Wrap(err, "waiting for next block")
 				}

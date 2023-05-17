@@ -2,6 +2,8 @@
 
 All notable changes will be documented here.
 
+## [v0.3.1] - 2023-05-17
+- add support for configuring fee granter for transactions
 ## [v0.3.0] - 2023-03-14
 
 - Add utility to create query client
