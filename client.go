@@ -221,6 +221,7 @@ func (c Client) waitForBlockHeight(ctx context.Context, h int64) error {
 		case <-ctx.Done():
 			return errors.Wrap(ctx.Err(), "context is cancelled")
 		case <-ticker.C:
+		default:
 		}
 	}
 
