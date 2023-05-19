@@ -221,7 +221,6 @@ func (c Client) waitForBlockHeight(ctx context.Context, h int64) error {
 		case <-ctx.Done():
 			return errors.Wrap(ctx.Err(), "context is cancelled")
 		case <-ticker.C:
-		default:
 		}
 	}
 
@@ -241,7 +240,7 @@ func (c Client) waitForTx(ctx context.Context, hash string) (*ctypes.ResultTx, e
 			if strings.Contains(err.Error(), "not found") {
 				// Tx not found, wait for next block and try again
 				err := c.waitForNextBlock(ctx)
-				if err != nil {
+				if err != nil && !strings.Contains(err.Error(), "timeout"){
 					return nil, errors.Wrap(err, "waiting for next block")
 				}
 				continue
