@@ -111,7 +111,7 @@ func (c Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg) error {
 
 	_, err = c.waitForTx(ctx, txHash)
 	if err != nil {
-		return errors.Wrap(err, "error waiting for tx " + txHash)
+		return errors.Wrap(err, "error waiting for tx")
 	}
 
 	return nil
@@ -126,7 +126,7 @@ func (c Client) BroadcastTxAndWait(ctx context.Context, msg sdk.Msg) error {
 
 	_, err = c.waitForTx(ctx, txHash)
 	if err != nil {
-		return errors.Wrap(err, "error waiting for tx " + txHash)
+		return errors.Wrap(err, "error waiting for tx")
 	}
 
 	return nil
