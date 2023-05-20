@@ -111,7 +111,7 @@ func (c Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg) error {
 
 	_, err = c.waitForTx(ctx, txHash)
 	if err != nil {
-		return errors.Wrap(err, "error waiting for tx")
+		return errors.Wrap(err, "error waiting for tx" + txHash)
 	}
 
 	return nil
@@ -126,7 +126,7 @@ func (c Client) BroadcastTxAndWait(ctx context.Context, msg sdk.Msg) error {
 
 	_, err = c.waitForTx(ctx, txHash)
 	if err != nil {
-		return errors.Wrap(err, "error waiting for tx")
+		return errors.Wrap(err, "error waiting for tx" + txHash)
 	}
 
 	return nil
@@ -240,7 +240,7 @@ func (c Client) waitForTx(ctx context.Context, hash string) (*ctypes.ResultTx, e
 			if strings.Contains(err.Error(), "not found") {
 				// Tx not found, wait for next block and try again
 				err := c.waitForNextBlock(ctx)
-				if err != nil {
+				if err != nil && !strings.Contains(err.Error(), "timeout"){
 					return nil, errors.Wrap(err, "waiting for next block")
 				}
 				continue
