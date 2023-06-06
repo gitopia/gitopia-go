@@ -2,9 +2,8 @@
 
 A gitopia client library and cosmos sdk wrapper
 
-## Environment configs
-// TODO: accept config via parameters
-configure the below environment variables
+## configs
+configure the below config variables
 ```
 GITOPIA_ADDR
 TM_ADDR

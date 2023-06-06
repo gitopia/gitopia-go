@@ -18,7 +18,6 @@ import (
 	otypes "github.com/gitopia/gitopia/v2/x/offchain/types"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func initClientConfig() {
@@ -55,8 +54,8 @@ func CommandInit(cmd *cobra.Command, appName string) error {
 
 func GetClientContext(cmd *cobra.Command) (client.Context, error) {
 	clientCtx := client.GetClientContextFromCmd(cmd)
-	clientCtx = clientCtx.WithChainID(viper.GetString("CHAIN_ID"))
-	clientCtx = clientCtx.WithNodeURI(viper.GetString("TM_ADDR"))
+	clientCtx = clientCtx.WithChainID(CHAIN_ID)
+	clientCtx = clientCtx.WithNodeURI(TM_ADDR)
 	c, err := client.NewClientFromNode(clientCtx.NodeURI)
 	if err != nil {
 		return clientCtx, errors.Wrap(err, "error creatig tm client")
@@ -74,7 +73,7 @@ func GetClientContext(cmd *cobra.Command) (client.Context, error) {
 		return clientCtx, errors.Wrap(err, "error creating keyring backend")
 	}
 	clientCtx = clientCtx.WithKeyring(kr)
-	clientCtx = clientCtx.WithKeyringDir(viper.GetString("WORKING_DIR"))
+	clientCtx = clientCtx.WithKeyringDir(WORKING_DIR)
 
 	from, err := cmd.Flags().GetString(flags.FlagFrom)
 	if err != nil {
@@ -87,7 +86,7 @@ func GetClientContext(cmd *cobra.Command) (client.Context, error) {
 
 	clientCtx = clientCtx.WithFrom(from).WithFromAddress(fromAddr).WithFromName(fromName)
 
-	feeGranterAddr := sdk.MustAccAddressFromBech32(viper.GetString("FEE_GRANTER_ADDR"))
+	feeGranterAddr := sdk.MustAccAddressFromBech32(FEE_GRANTER_ADDR)
 	clientCtx = clientCtx.WithFeeGranterAddress(feeGranterAddr)
 	return clientCtx, nil
 }

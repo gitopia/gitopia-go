@@ -2,6 +2,10 @@
 
 All notable changes will be documented here.
 
+## [v0.4.1] - TBD
+- support broadcasting multiple transactions
+- accept configs dynamically set by the user
+
 ## [v0.3.1] - 2023-05-17
 - add support for configuring fee granter for transactions
 ## [v0.3.0] - 2023-03-14
