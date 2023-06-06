@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 	"time"
 
@@ -49,8 +50,6 @@ type Client struct {
 func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, error) {
 	w := logger.FromContext(ctx).WriterLevel(logrus.DebugLevel)
 	cc = cc.WithOutput(w)
-
-	txf = txf.WithGasPrices(GAS_PRICES).WithGasAdjustment(GAS_ADJUSTMENT)
 
 	rc, err := rpchttp.New(cc.NodeURI, TM_WS_ENDPOINT)
 	if err != nil {
@@ -144,8 +143,12 @@ func BroadcastTx(clientCtx client.Context, txf tx.Factory, msgs ...sdk.Msg) (str
 	if err != nil {
 		return "", err
 	}
+	fees, err := calculateFee(adjusted)
+	if err != nil {
+		return "", err
+	}
 
-	txf = txf.WithGas(adjusted)
+	txf = txf.WithGas(adjusted).WithFees(fees.String())
 
 	txn, err := txf.BuildUnsignedTx(msgs...)
 	if err != nil {
@@ -251,4 +254,15 @@ func (c Client) waitForTx(ctx context.Context, hash string) (*ctypes.ResultTx, e
 	}
 
 	return nil, fmt.Errorf("max block wait exceeded")
+}
+
+func calculateFee(gas uint64) (sdk.Coins, error) {
+	gasPrice, err := sdk.ParseDecCoin(GAS_PRICES)
+	if err != nil {
+		return nil, err
+	}
+	fee := float64(gas) * float64(gasPrice.Amount.MustFloat64())
+	fee = math.Ceil(fee)
+
+	return sdk.NewCoins(sdk.NewCoin(gasPrice.Denom, sdk.NewInt(int64(fee)))), nil
 }

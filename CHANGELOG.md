@@ -5,6 +5,7 @@ All notable changes will be documented here.
 ## [v0.4.1] - TBD
 - support broadcasting multiple transactions
 - accept configs dynamically set by the user
+- calculate fees for tx
 
 ## [v0.3.1] - 2023-05-17
 - add support for configuring fee granter for transactions
