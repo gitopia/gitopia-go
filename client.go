@@ -18,7 +18,6 @@ import (
 	rtypes "github.com/gitopia/gitopia/v2/x/rewards/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 	rpcclient "github.com/tendermint/tendermint/rpc/client"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -51,14 +50,14 @@ func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, 
 	w := logger.FromContext(ctx).WriterLevel(logrus.DebugLevel)
 	cc = cc.WithOutput(w)
 
-	txf = txf.WithGasPrices(viper.GetString("GAS_PRICES")).WithGasAdjustment(GAS_ADJUSTMENT)
+	txf = txf.WithGasPrices(GAS_PRICES).WithGasAdjustment(GAS_ADJUSTMENT)
 
 	rc, err := rpchttp.New(cc.NodeURI, TM_WS_ENDPOINT)
 	if err != nil {
 		return Client{}, errors.Wrap(err, "error creating rpc client")
 	}
 
-	q, err := GetQueryClient(viper.GetString("GITOPIA_ADDR"))
+	q, err := GetQueryClient(GITOPIA_ADDR)
 	if err != nil {
 		return Client{}, errors.Wrap(err, "error creating query client")
 	}
@@ -117,9 +116,9 @@ func (c Client) AuthorizedBroadcastTx(ctx context.Context, msg sdk.Msg) error {
 	return nil
 }
 
-func (c Client) BroadcastTxAndWait(ctx context.Context, msg sdk.Msg) error {
+func (c Client) BroadcastTxAndWait(ctx context.Context, msg ...sdk.Msg) error {
 	// !!HACK!! set sequence to 0 to force refresh account sequence for every txn
-	txHash, err := BroadcastTx(c.cc, c.txf.WithSequence(0).WithFeePayer(c.Address()), msg)
+	txHash, err := BroadcastTx(c.cc, c.txf.WithSequence(0).WithFeePayer(c.Address()), msg...)
 	if err != nil {
 		return err
 	}
