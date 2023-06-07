@@ -14,8 +14,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	gtypes "github.com/gitopia/gitopia/v2/x/gitopia/types"
-	rtypes "github.com/gitopia/gitopia/v2/x/rewards/types"
 	otypes "github.com/gitopia/gitopia/v2/x/offchain/types"
+	rtypes "github.com/gitopia/gitopia/v2/x/rewards/types"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -29,6 +29,29 @@ func initClientConfig() {
 }
 
 func CommandInit(cmd *cobra.Command, appName string) error {
+	// configure custom fields
+	clientCtx, err := GetClientContext(appName)
+	if err != nil {
+		return errors.Wrap(err, "error getting client context")
+	}
+
+	// set to read tx flags
+	err = client.SetCmdClientContext(cmd, clientCtx)
+	if err != nil {
+		return errors.Wrap(err, "error getting client context")
+	}
+
+	// read tx flags
+	clientCtx, err = client.GetClientTxContext(cmd)
+	if err != nil {
+		return errors.Wrap(err, "error getting client context")
+	}
+
+	// sets global flags for keys subcommand
+	return client.SetCmdClientContext(cmd, clientCtx)
+}
+
+func GetClientContext(appName string) (client.Context, error) {
 	version.Name = appName // os keyring service name is same as version name
 	initClientConfig()
 
@@ -42,51 +65,46 @@ func CommandInit(cmd *cobra.Command, appName string) error {
 
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 	txCfg := tx.NewTxConfig(marshaler, tx.DefaultSignModes)
-	clientCtx := client.GetClientContextFromCmd(cmd).
+	clientCtx := client.Context{}.
 		WithCodec(marshaler).
 		WithInterfaceRegistry(interfaceRegistry).
 		WithAccountRetriever(authtypes.AccountRetriever{}).
 		WithTxConfig(txCfg).
 		WithInput(os.Stdin)
-	// sets global flags for keys subcommand
-	return client.SetCmdClientContext(cmd, clientCtx)
-}
 
-func GetClientContext(cmd *cobra.Command) (client.Context, error) {
-	clientCtx := client.GetClientContextFromCmd(cmd)
 	clientCtx = clientCtx.WithChainID(CHAIN_ID)
 	clientCtx = clientCtx.WithNodeURI(TM_ADDR)
 	c, err := client.NewClientFromNode(clientCtx.NodeURI)
 	if err != nil {
-		return clientCtx, errors.Wrap(err, "error creatig tm client")
+		return clientCtx, errors.Wrap(err, "error creating tm client")
 	}
 	clientCtx = clientCtx.WithClient(c)
 	clientCtx = clientCtx.WithBroadcastMode(flags.BroadcastSync)
 	clientCtx = clientCtx.WithSkipConfirmation(true)
+	clientCtx = clientCtx.WithKeyringDir(WORKING_DIR)
 
-	backend, err := cmd.Flags().GetString(flags.FlagKeyringBackend)
+	feeGranterAddr := sdk.MustAccAddressFromBech32(FEE_GRANTER_ADDR)
+	clientCtx = clientCtx.WithFeeGranterAddress(feeGranterAddr)
+	return clientCtx, nil
+}
+
+func GetClientContextWithOptions(appName string, kb string, from string) (client.Context, error) {
+	clientCtx, err := GetClientContext(appName)
 	if err != nil {
-		return clientCtx, errors.Wrap(err, "error parsing keyring backend")
+		return client.Context{}, err
 	}
-	kr, err := client.NewKeyringFromBackend(clientCtx, backend)
+
+	kr, err := client.NewKeyringFromBackend(clientCtx, kb)
 	if err != nil {
 		return clientCtx, errors.Wrap(err, "error creating keyring backend")
 	}
 	clientCtx = clientCtx.WithKeyring(kr)
-	clientCtx = clientCtx.WithKeyringDir(WORKING_DIR)
 
-	from, err := cmd.Flags().GetString(flags.FlagFrom)
-	if err != nil {
-		return clientCtx, errors.Wrap(err, "error parsing from flag")
-	}
 	fromAddr, fromName, _, err := client.GetFromFields(clientCtx, kr, from)
 	if err != nil {
 		return clientCtx, errors.Wrap(err, "error parsing from Addr")
 	}
 
 	clientCtx = clientCtx.WithFrom(from).WithFromAddress(fromAddr).WithFromName(fromName)
-
-	feeGranterAddr := sdk.MustAccAddressFromBech32(FEE_GRANTER_ADDR)
-	clientCtx = clientCtx.WithFeeGranterAddress(feeGranterAddr)
 	return clientCtx, nil
 }
