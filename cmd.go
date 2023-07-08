@@ -83,8 +83,11 @@ func GetClientContext(appName string) (client.Context, error) {
 	clientCtx = clientCtx.WithSkipConfirmation(true)
 	clientCtx = clientCtx.WithKeyringDir(WORKING_DIR)
 
-	feeGranterAddr := sdk.MustAccAddressFromBech32(FEE_GRANTER_ADDR)
-	clientCtx = clientCtx.WithFeeGranterAddress(feeGranterAddr)
+	if FEE_GRANTER_ADDR != "" {
+		feeGranterAddr := sdk.MustAccAddressFromBech32(FEE_GRANTER_ADDR)
+		clientCtx = clientCtx.WithFeeGranterAddress(feeGranterAddr)
+	}
+
 	return clientCtx, nil
 }
 
