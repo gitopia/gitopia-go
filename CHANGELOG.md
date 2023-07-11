@@ -2,6 +2,14 @@
 
 All notable changes will be documented here.
 
+## [v0.5.0] - 2023-07-07
+
+- initialize cosmos sdk client context in the command pre run handler
+### upgrade instructions:
+Currently, client context was partially initialized in the pre run handler and the run handler. Now, context initialization is done in one place.
+- If you're using client context with commands, initialize the context in the pre run handler. fetch the context from the command in the run handler. All configurations are read from command flagset
+- Otherwise, Get the client context completely initialized. limited params can be customized with arguments
+
 ## [v0.4.0] - 2023-06-07
 
 - support broadcasting multiple transactions
