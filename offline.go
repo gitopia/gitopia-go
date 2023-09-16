@@ -1,9 +1,9 @@
 package gitopia
 
 import (
-	"github.com/gitopia/gitopia/v2/x/offchain/types"
-	"github.com/pkg/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/gitopia/gitopia/v3/x/offchain/types"
+	"github.com/pkg/errors"
 )
 
 func (c Client) SignMsg(data []byte) ([]byte, error) {
