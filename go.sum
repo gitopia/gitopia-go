@@ -166,8 +166,8 @@ github.com/fsnotify/fsnotify v1.5.4/go.mod h1:OVB6XrOHzAwXMpEM7uPOzcehqUV2UqJxmV
 github.com/fsnotify/fsnotify v1.6.0 h1:n+5WquG0fcWoWp6xPWfHdbskMCQaFnG6PfBrh1Ky4HY=
 github.com/fsnotify/fsnotify v1.6.0/go.mod h1:sl3t1tCWJFWoRz9R8WJCbQihKKwmorjAbSClcnxKAGw=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
-github.com/gitopia/gitopia/v3 v3.0.2 h1:z7PjZaFXzFbajNUudfFgDr8Db/7a8SLuzxJa62IAaI4=
-github.com/gitopia/gitopia/v3 v3.0.2/go.mod h1:2FebFx8h9yI1ufvPYZ1H7N6denu8qfMXGWtdeiNrXgc=
+github.com/gitopia/gitopia/v3 v3.3.1-rc h1:s0nCSJQTOEzgnqBn8uLENQuWPV6YSo2nx9794noLMAY=
+github.com/gitopia/gitopia/v3 v3.3.1-rc/go.mod h1:0WMncVV0dhgZCEZInBUk6pKthQ5twcbJ7Ejouwb3pIM=
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20191125211704-12ad95a8df72/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20200222043503-6f7a984d4dc4/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=
