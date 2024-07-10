@@ -2,9 +2,19 @@
 
 All notable changes will be documented here.
 
+## [v0.5.2] - 2024-07-10
+
+- upgrade gitopia version to v3.3.1 (offchain sign fix)
+- upgrade ledger dependencies
+
+## [v0.5.1] - 2023-09-16
+
+- upgrade gitopia version to v3.0.2
+
 ## [v0.5.0] - 2023-07-07
 
 - initialize cosmos sdk client context in the command pre run handler
+
 ### upgrade instructions:
 Currently, client context was partially initialized in the pre run handler and the run handler. Now, context initialization is done in one place.
 - If you're using client context with commands, initialize the context in the pre run handler. fetch the context from the command in the run handler. All configurations are read from command flagset
