@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/cosmos/cosmos-sdk v0.46.13
-	github.com/gitopia/gitopia/v3 v3.3.1-rc
+	github.com/gitopia/gitopia/v3 v3.3.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/sirupsen/logrus v1.9.0
