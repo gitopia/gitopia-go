@@ -9,26 +9,26 @@ import (
 	"strings"
 	"time"
 
+	rpcclient "github.com/cometbft/cometbft/rpc/client"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	ctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/authz"
 	"github.com/gitopia/gitopia-go/logger"
-	gtypes "github.com/gitopia/gitopia/v3/x/gitopia/types"
-	rtypes "github.com/gitopia/gitopia/v3/x/rewards/types"
+	gtypes "github.com/gitopia/gitopia/v4/x/gitopia/types"
+	rtypes "github.com/gitopia/gitopia/v4/x/rewards/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	rpcclient "github.com/tendermint/tendermint/rpc/client"
-	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
 	GITOPIA_ACC_ADDRESS_PREFIX = "gitopia"
-	GAS_ADJUSTMENT             = 1.5
+	GAS_ADJUSTMENT             = 1.8
 	MAX_TRIES                  = 5
 	MAX_WAIT_BLOCKS            = 10
 	TM_WS_ENDPOINT             = "/websocket"

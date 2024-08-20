@@ -4,15 +4,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/cometbft/cometbft/libs/log"
+	jsonrpcclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
+	jsonrpctypes "github.com/cometbft/cometbft/rpc/jsonrpc/types"
 	"github.com/gitopia/gitopia-go/logger"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"github.com/tendermint/tendermint/libs/log"
-	jsonrpcclient "github.com/tendermint/tendermint/rpc/jsonrpc/client"
-	jsonrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
 )
 
 const (

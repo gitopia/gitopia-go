@@ -2,6 +2,13 @@
 
 All notable changes will be documented here.
 
+## [v0.6.0] - 2024-08-20
+
+- upgrade cosmos-sdk to v0.47.13
+- upgrade gitopia to v4.0.0
+- upgrade go to 1.21
+- set gas adjustment to 1.8
+
 ## [v0.5.2] - 2024-07-10
 
 - upgrade gitopia version to v3.3.1 (offchain sign fix)
