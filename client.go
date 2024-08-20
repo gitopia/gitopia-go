@@ -28,7 +28,7 @@ import (
 
 const (
 	GITOPIA_ACC_ADDRESS_PREFIX = "gitopia"
-	GAS_ADJUSTMENT             = 1.5
+	GAS_ADJUSTMENT             = 1.8
 	MAX_TRIES                  = 5
 	MAX_WAIT_BLOCKS            = 10
 	TM_WS_ENDPOINT             = "/websocket"
