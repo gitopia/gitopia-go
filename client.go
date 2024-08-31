@@ -9,9 +9,8 @@ import (
 	"strings"
 	"time"
 
-	rpcclient "github.com/cometbft/cometbft/rpc/client"
-	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	ctypes "github.com/cometbft/cometbft/rpc/core/types"
+	jsonrpcclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -41,7 +40,7 @@ type Query struct {
 type Client struct {
 	cc  client.Context
 	txf tx.Factory
-	rc  rpcclient.Client
+	rc  *jsonrpcclient.Client
 	w   *io.PipeWriter
 
 	Query
@@ -51,7 +50,7 @@ func NewClient(ctx context.Context, cc client.Context, txf tx.Factory) (Client, 
 	w := logger.FromContext(ctx).WriterLevel(logrus.DebugLevel)
 	cc = cc.WithOutput(w)
 
-	rc, err := rpchttp.New(cc.NodeURI, TM_WS_ENDPOINT)
+	rc, err := jsonrpcclient.New(cc.NodeURI)
 	if err != nil {
 		return Client{}, errors.Wrap(err, "error creating rpc client")
 	}
@@ -139,6 +138,8 @@ func BroadcastTx(clientCtx client.Context, txf tx.Factory, msgs ...sdk.Msg) (str
 		return "", err
 	}
 
+	txf = txf.WithGasAdjustment(GAS_ADJUSTMENT)
+
 	_, adjusted, err := tx.CalculateGas(clientCtx, txf, msgs...)
 	if err != nil {
 		return "", err
@@ -176,7 +177,12 @@ func BroadcastTx(clientCtx client.Context, txf tx.Factory, msgs ...sdk.Msg) (str
 
 // Status returns the node Status
 func (c Client) Status(ctx context.Context) (*ctypes.ResultStatus, error) {
-	return c.rc.Status(ctx)
+	var result ctypes.ResultStatus
+	_, err := c.rc.Call(ctx, "status", map[string]interface{}{}, &result)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // latestBlockHeight returns the lastest block height of the app.
@@ -237,7 +243,8 @@ func (c Client) waitForTx(ctx context.Context, hash string) (*ctypes.ResultTx, e
 		return nil, errors.Wrapf(err, "unable to decode tx hash '%s'", hash)
 	}
 	for i := 0; i < MAX_WAIT_BLOCKS; i++ {
-		resp, err := c.rc.Tx(ctx, bz, false)
+		var result ctypes.ResultTx
+		_, err := c.rc.Call(ctx, "tx", map[string]interface{}{"hash": bz, "prove": false}, &result)
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
 				// Tx not found, wait for next block and try again
@@ -250,7 +257,7 @@ func (c Client) waitForTx(ctx context.Context, hash string) (*ctypes.ResultTx, e
 			return nil, errors.Wrapf(err, "fetching tx '%s'", hash)
 		}
 		// Tx found
-		return resp, nil
+		return &result, nil
 	}
 
 	return nil, fmt.Errorf("max block wait exceeded")
