@@ -139,6 +139,8 @@ func BroadcastTx(clientCtx client.Context, txf tx.Factory, msgs ...sdk.Msg) (str
 		return "", err
 	}
 
+	txf = txf.WithGasAdjustment(GAS_ADJUSTMENT)
+
 	_, adjusted, err := tx.CalculateGas(clientCtx, txf, msgs...)
 	if err != nil {
 		return "", err
