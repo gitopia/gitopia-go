@@ -2,6 +2,11 @@
 
 All notable changes will be documented here.
 
+## [v0.6.1] - 2024-08-31
+
+- remove websocket connection in rpc client
+- set GAS_ADJUSTMENT before estimating gas
+
 ## [v0.6.0] - 2024-08-20
 
 - upgrade cosmos-sdk to v0.47.13
