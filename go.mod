@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/cometbft/cometbft v0.37.6
 	github.com/cosmos/cosmos-sdk v0.47.13
-	github.com/gitopia/gitopia/v4 v4.0.0
+	github.com/gitopia/gitopia/v5 v5.0.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/sirupsen/logrus v1.9.3
@@ -31,6 +31,7 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cockroachdb/apd/v2 v2.0.2 // indirect
 	github.com/cockroachdb/errors v1.11.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/cockroachdb/pebble v1.1.0 // indirect
