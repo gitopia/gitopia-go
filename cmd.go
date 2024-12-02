@@ -13,9 +13,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	gtypes "github.com/gitopia/gitopia/v4/x/gitopia/types"
-	otypes "github.com/gitopia/gitopia/v4/x/offchain/types"
-	rtypes "github.com/gitopia/gitopia/v4/x/rewards/types"
+	gtypes "github.com/gitopia/gitopia/v5/x/gitopia/types"
+	otypes "github.com/gitopia/gitopia/v5/x/offchain/types"
+	rtypes "github.com/gitopia/gitopia/v5/x/rewards/types"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )

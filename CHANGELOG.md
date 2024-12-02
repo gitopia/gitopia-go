@@ -2,6 +2,10 @@
 
 All notable changes will be documented here.
 
+## [v0.6.2] - 2024-12-02
+
+- upgrade gitopia version to v5.1.0
+
 ## [v0.6.1] - 2024-08-31
 
 - remove websocket connection in rpc client
