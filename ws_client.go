@@ -4,14 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/cometbft/cometbft/libs/log"
 	jsonrpcclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
 	jsonrpctypes "github.com/cometbft/cometbft/rpc/jsonrpc/types"
 	"github.com/gitopia/gitopia-go/logger"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
@@ -52,10 +50,6 @@ func NewWSEvents(ctx context.Context, query string) (*WSEvents, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating ws client")
 	}
-
-	w := logger.FromContext(ctx).WriterLevel(logrus.DebugLevel)
-	l := log.NewTMLogger(log.NewSyncWriter(w))
-	wse.wsc.SetLogger(l)
 
 	if err := wse.wsc.Start(); err != nil {
 		return nil, errors.Wrap(err, "error connecting to WS")

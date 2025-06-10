@@ -2,7 +2,7 @@ package gitopia
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/gitopia/gitopia/v5/x/offchain/types"
+	"github.com/gitopia/gitopia/v6/x/offchain/types"
 	"github.com/pkg/errors"
 )
 
