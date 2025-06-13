@@ -16,6 +16,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/authz"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/gitopia/gitopia-go/logger"
 	gtypes "github.com/gitopia/gitopia/v6/x/gitopia/types"
 	rtypes "github.com/gitopia/gitopia/v6/x/rewards/types"
@@ -38,6 +39,7 @@ type Query struct {
 	Gitopia gtypes.QueryClient
 	Rewards rtypes.QueryClient
 	Storage storagetypes.QueryClient
+	Bank    banktypes.QueryClient
 }
 type Client struct {
 	cc  client.Context
@@ -84,7 +86,8 @@ func GetQueryClient(addr string) (Query, error) {
 	gqc := gtypes.NewQueryClient(grpcConn)
 	rqc := rtypes.NewQueryClient(grpcConn)
 	sc := storagetypes.NewQueryClient(grpcConn)
-	return Query{gqc, rqc, sc}, nil
+	bc := banktypes.NewQueryClient(grpcConn)
+	return Query{gqc, rqc, sc, bc}, nil
 }
 
 // implement io.Closer
