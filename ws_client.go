@@ -171,7 +171,7 @@ func (wse *WSEvents) ProcessEvents(ctx context.Context, h evenHandlerFunc) (<-ch
 
 			// hack: TM sends empty event to begin with. skipping
 			if string(jsonBuf) == "{}" {
-				logger.FromContext(ctx).Info("received empty event. continuing...")
+				// logger.FromContext(ctx).Info("received empty event. continuing...")
 				continue
 			}
 
