@@ -2,6 +2,7 @@ package gitopia
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	jsonrpcclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
@@ -29,13 +30,14 @@ var (
 type evenHandlerFunc func(context.Context, []byte) error
 
 type WSEvents struct {
-	wsc   *jsonrpcclient.WSClient
-	query string
+	wsc     *jsonrpcclient.WSClient
+	queries map[string]bool // Track active subscriptions
+	mu      sync.RWMutex    // Protect queries map
 }
 
-func NewWSEvents(ctx context.Context, query string) (*WSEvents, error) {
+func NewWSEvents(ctx context.Context) (*WSEvents, error) {
 	wse := &WSEvents{
-		query: query,
+		queries: make(map[string]bool),
 	}
 
 	var err error
@@ -44,8 +46,8 @@ func NewWSEvents(ctx context.Context, query string) (*WSEvents, error) {
 		jsonrpcclient.PingPeriod(TM_WS_PING_PERIOD),
 		jsonrpcclient.MaxReconnectAttempts(TM_WS_MAX_RECONNECT),
 		jsonrpcclient.OnReconnect(func() {
-			// resubscribe immediately
-			wse.subscribeAfter(0 * time.Second)
+			// Resubscribe to all queries after reconnection
+			wse.resubscribeAll()
 		}))
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating ws client")
@@ -58,6 +60,64 @@ func NewWSEvents(ctx context.Context, query string) (*WSEvents, error) {
 	return wse, nil
 }
 
+// Subscribe to a single query
+func (wse *WSEvents) SubscribeQuery(ctx context.Context, query string) error {
+	wse.mu.Lock()
+	defer wse.mu.Unlock()
+
+	// Avoid duplicate subscriptions
+	if wse.queries[query] {
+		return nil // Already subscribed
+	}
+
+	err := wse.wsc.Subscribe(ctx, query)
+	if err != nil {
+		return errors.Wrap(err, "error sending subscribe request")
+	}
+
+	wse.queries[query] = true
+	return nil
+}
+
+// Subscribe to multiple queries at once
+func (wse *WSEvents) SubscribeQueries(ctx context.Context, queries ...string) error {
+	for _, query := range queries {
+		if err := wse.SubscribeQuery(ctx, query); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Unsubscribe from a specific query
+func (wse *WSEvents) UnsubscribeQuery(ctx context.Context, query string) error {
+	wse.mu.Lock()
+	defer wse.mu.Unlock()
+
+	if !wse.queries[query] {
+		return nil // Not subscribed
+	}
+
+	if err := wse.wsc.Unsubscribe(ctx, query); err != nil {
+		return err
+	}
+
+	delete(wse.queries, query)
+	return nil
+}
+
+// Get list of active subscriptions
+func (wse *WSEvents) GetActiveQueries() []string {
+	wse.mu.RLock()
+	defer wse.mu.RUnlock()
+
+	queries := make([]string, 0, len(wse.queries))
+	for query := range wse.queries {
+		queries = append(queries, query)
+	}
+	return queries
+}
+
 func terminateOnCancel(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -67,34 +127,26 @@ func terminateOnCancel(ctx context.Context) error {
 	return nil
 }
 
-// processes events from tm
-// cancel context to stop processing
-// returns error on failure
-// returns error when event handler returns error
-// handler must handle all errors. it must return only fatal errors
-func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan struct{}, chan error) {
+// ProcessEvents handles events from all subscribed queries
+// The handler receives all events and must filter/route them as needed
+func (wse *WSEvents) ProcessEvents(ctx context.Context, h evenHandlerFunc) (<-chan struct{}, chan error) {
 	e := make(chan error)
 	done := make(chan struct{})
 
 	go func() {
 		defer func() { close(done) }()
-		logger.FromContext(ctx).Debug("subscribing to tm")
-		defer logger.FromContext(ctx).Debug("subscription done")
-
-		err := wse.wsc.Subscribe(ctx, wse.query)
-		if err != nil {
-			e <- errors.Wrap(err, "error sending subscribe request")
-			return
-		}
+		logger.FromContext(ctx).Debug("processing tm events")
+		defer logger.FromContext(ctx).Debug("event processing done")
 
 		//!! CAUTION!! all events are processed sequentially in order to support backfill!
 		// this might lead to event queue overflow on the chain and connection disconnection
 		for {
-			err = terminateOnCancel(ctx)
+			err := terminateOnCancel(ctx)
 			if err != nil {
 				e <- err
 				return
 			}
+
 			var event jsonrpctypes.RPCResponse
 			select {
 			case event = <-wse.wsc.ResponsesCh:
@@ -102,18 +154,9 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 				e <- errors.New("ws conn closed")
 				return
 			}
+
 			if event.Error != nil {
 				logger.FromContext(ctx).Error("WS error", "err", event.Error.Error())
-				// Error can be ErrAlreadySubscribed or max client (subscriptions per
-				// client) reached or Tendermint exited.
-				// We can ignore ErrAlreadySubscribed, but need to retry in other
-				// cases.
-				// if !isErrAlreadySubscribed(event.Error) {
-				// 	// Resubscribe after 1 second to give Tendermint time to restart (if
-				// 	// crashed).
-				// 	wse.subscribeAfter(1 * time.Second)
-				// }
-				// OnReconnect handles this
 				mTmError.With(prometheus.Labels{"error": "ws_event_error"}).Inc()
 				continue
 			}
@@ -125,11 +168,13 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 				mTmError.With(prometheus.Labels{"error": "parse_error"}).Inc()
 				continue
 			}
+
 			// hack: TM sends empty event to begin with. skipping
 			if string(jsonBuf) == "{}" {
 				logger.FromContext(ctx).Info("received empty event. continuing...")
 				continue
 			}
+
 			err = h(ctx, jsonBuf)
 			if err != nil {
 				logger.FromContext(ctx).Error(errors.WithMessage(err, "error from event handler"))
@@ -142,21 +187,28 @@ func (wse *WSEvents) Subscribe(ctx context.Context, h evenHandlerFunc) (<-chan s
 	return ctx.Done(), e
 }
 
-func (wse *WSEvents) Unsubscribe(ctx context.Context, query string) error {
-	if err := wse.wsc.Unsubscribe(ctx, query); err != nil {
-		return err
+// Resubscribe to all active queries (used after reconnection)
+func (wse *WSEvents) resubscribeAll() {
+	wse.mu.RLock()
+	queries := make([]string, 0, len(wse.queries))
+	for query := range wse.queries {
+		queries = append(queries, query)
 	}
+	wse.mu.RUnlock()
 
-	return nil
+	time.Sleep(100 * time.Millisecond) // Small delay to ensure connection is ready
+
+	for _, query := range queries {
+		err := wse.wsc.Subscribe(context.Background(), query)
+		if err != nil {
+			wse.wsc.Logger.Error("Failed to resubscribe", "query", query, "err", err)
+		} else {
+			wse.wsc.Logger.Info("Resubscribed successfully", "query", query)
+		}
+	}
 }
 
-// After being reconnected, it is necessary to redo subscription to server
-// otherwise no data will be automatically received.
-func (wse *WSEvents) subscribeAfter(d time.Duration) {
-	time.Sleep(d)
-
-	err := wse.wsc.Subscribe(context.Background(), wse.query)
-	if err != nil {
-		wse.wsc.Logger.Error("Failed to resubscribe", "err", err)
-	}
+// Close the connection and cleanup
+func (wse *WSEvents) Close() error {
+	return wse.wsc.Stop()
 }
