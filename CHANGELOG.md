@@ -2,6 +2,12 @@
 
 All notable changes will be documented here.
 
+## [v0.7.0] - 2025-09-03
+
+- upgrade gitopia version to v6.0.0
+- support multiple query subscriptions in a single websocket connection
+- add storage and bank query clients
+
 ## [v0.6.2] - 2024-12-02
 
 - upgrade gitopia version to v5.1.0
