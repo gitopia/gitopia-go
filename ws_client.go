@@ -16,7 +16,8 @@ import (
 
 const (
 	TM_WS_PING_PERIOD   = 10 * time.Second
-	TM_WS_MAX_RECONNECT = 3
+	TM_WS_MAX_RECONNECT = -1 // Unlimited reconnection attempts
+	TM_WS_RECONNECT_DELAY = 30 * time.Second // Delay between reconnection attempts
 )
 
 var (
@@ -30,18 +31,24 @@ var (
 type evenHandlerFunc func(context.Context, []byte) error
 
 type WSEvents struct {
-	wsc     *jsonrpcclient.WSClient
-	queries map[string]bool // Track active subscriptions
-	mu      sync.RWMutex    // Protect queries map
+	wsc      *jsonrpcclient.WSClient
+	endpoint string          // Store endpoint for reconnection
+	queries  map[string]bool // Track active subscriptions
+	mu       sync.RWMutex    // Protect queries map
 }
 
 func NewWSEvents(ctx context.Context) (*WSEvents, error) {
+	return NewWSEventsWithEndpoint(ctx, viper.GetString("TM_ADDR"))
+}
+
+func NewWSEventsWithEndpoint(ctx context.Context, endpoint string) (*WSEvents, error) {
 	wse := &WSEvents{
-		queries: make(map[string]bool),
+		endpoint: endpoint,
+		queries:  make(map[string]bool),
 	}
 
 	var err error
-	wse.wsc, err = jsonrpcclient.NewWS(viper.GetString("TM_ADDR"),
+	wse.wsc, err = jsonrpcclient.NewWS(endpoint,
 		TM_WS_ENDPOINT,
 		jsonrpcclient.PingPeriod(TM_WS_PING_PERIOD),
 		jsonrpcclient.MaxReconnectAttempts(TM_WS_MAX_RECONNECT),
@@ -127,7 +134,7 @@ func terminateOnCancel(ctx context.Context) error {
 	return nil
 }
 
-// ProcessEvents handles events from all subscribed queries
+// ProcessEvents handles events from all subscribed queries with automatic reconnection
 // The handler receives all events and must filter/route them as needed
 func (wse *WSEvents) ProcessEvents(ctx context.Context, h evenHandlerFunc) (<-chan struct{}, chan error) {
 	e := make(chan error)
@@ -138,53 +145,110 @@ func (wse *WSEvents) ProcessEvents(ctx context.Context, h evenHandlerFunc) (<-ch
 		logger.FromContext(ctx).Debug("processing tm events")
 		defer logger.FromContext(ctx).Debug("event processing done")
 
-		//!! CAUTION!! all events are processed sequentially in order to support backfill!
-		// this might lead to event queue overflow on the chain and connection disconnection
 		for {
-			err := terminateOnCancel(ctx)
+			err := wse.processEventsLoop(ctx, h)
 			if err != nil {
-				e <- err
-				return
-			}
-
-			var event jsonrpctypes.RPCResponse
-			select {
-			case event = <-wse.wsc.ResponsesCh:
-			case <-wse.wsc.Quit():
-				e <- errors.New("ws conn closed")
-				return
-			}
-
-			if event.Error != nil {
-				logger.FromContext(ctx).Error("WS error", "err", event.Error.Error())
-				mTmError.With(prometheus.Labels{"error": "ws_event_error"}).Inc()
-				continue
-			}
-
-			jsonBuf, err := event.Result.MarshalJSON()
-			if err != nil {
-				logger.FromContext(ctx).WithError(err).WithField("result", event.Result).
-					Error("error parsing result. ignoring event")
-				mTmError.With(prometheus.Labels{"error": "parse_error"}).Inc()
-				continue
-			}
-
-			// hack: TM sends empty event to begin with. skipping
-			if string(jsonBuf) == "{}" {
-				// logger.FromContext(ctx).Info("received empty event. continuing...")
-				continue
-			}
-
-			err = h(ctx, jsonBuf)
-			if err != nil {
-				logger.FromContext(ctx).Error(errors.WithMessage(err, "error from event handler"))
-				mTmError.With(prometheus.Labels{"error": "handler_error"}).Inc()
-				e <- err
-				return
+				if ctx.Err() != nil {
+					// Context cancelled, exit gracefully
+					e <- ctx.Err()
+					return
+				}
+				
+				logger.FromContext(ctx).WithError(err).Error("WebSocket connection lost, attempting to reconnect")
+				mTmError.With(prometheus.Labels{"error": "connection_lost"}).Inc()
+				
+				// Attempt to reconnect
+				if reconnectErr := wse.reconnect(ctx); reconnectErr != nil {
+					logger.FromContext(ctx).WithError(reconnectErr).Error("Failed to reconnect WebSocket")
+					time.Sleep(TM_WS_RECONNECT_DELAY)
+					continue
+				}
+				
+				logger.FromContext(ctx).Info("WebSocket reconnected successfully")
 			}
 		}
 	}()
 	return ctx.Done(), e
+}
+
+// processEventsLoop handles the main event processing loop
+func (wse *WSEvents) processEventsLoop(ctx context.Context, h evenHandlerFunc) error {
+	//!! CAUTION!! all events are processed sequentially in order to support backfill!
+	// this might lead to event queue overflow on the chain and connection disconnection
+	for {
+		err := terminateOnCancel(ctx)
+		if err != nil {
+			return err
+		}
+
+		var event jsonrpctypes.RPCResponse
+		select {
+		case event = <-wse.wsc.ResponsesCh:
+		case <-wse.wsc.Quit():
+			return errors.New("ws conn closed")
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		if event.Error != nil {
+			logger.FromContext(ctx).Error("WS error", "err", event.Error.Error())
+			mTmError.With(prometheus.Labels{"error": "ws_event_error"}).Inc()
+			continue
+		}
+
+		jsonBuf, err := event.Result.MarshalJSON()
+		if err != nil {
+			logger.FromContext(ctx).WithError(err).WithField("result", event.Result).
+				Error("error parsing result. ignoring event")
+			mTmError.With(prometheus.Labels{"error": "parse_error"}).Inc()
+			continue
+		}
+
+		// hack: TM sends empty event to begin with. skipping
+		if string(jsonBuf) == "{}" {
+			// logger.FromContext(ctx).Info("received empty event. continuing...")
+			continue
+		}
+
+		err = h(ctx, jsonBuf)
+		if err != nil {
+			logger.FromContext(ctx).Error(errors.WithMessage(err, "error from event handler"))
+			mTmError.With(prometheus.Labels{"error": "handler_error"}).Inc()
+			// Don't return on handler errors, just log and continue
+			continue
+		}
+	}
+}
+
+// reconnect attempts to reconnect the WebSocket client
+func (wse *WSEvents) reconnect(ctx context.Context) error {
+	// Close existing connection
+	if wse.wsc != nil {
+		wse.wsc.Stop()
+	}
+	
+	// Create new WebSocket client using stored endpoint
+	var err error
+	wse.wsc, err = jsonrpcclient.NewWS(wse.endpoint,
+		TM_WS_ENDPOINT,
+		jsonrpcclient.PingPeriod(TM_WS_PING_PERIOD),
+		jsonrpcclient.MaxReconnectAttempts(TM_WS_MAX_RECONNECT),
+		jsonrpcclient.OnReconnect(func() {
+			// Resubscribe to all queries after reconnection
+			wse.resubscribeAll()
+		}))
+	if err != nil {
+		return errors.Wrap(err, "error creating new ws client")
+	}
+
+	if err := wse.wsc.Start(); err != nil {
+		return errors.Wrap(err, "error starting new ws client")
+	}
+	
+	// Resubscribe to all active queries
+	wse.resubscribeAll()
+	
+	return nil
 }
 
 // Resubscribe to all active queries (used after reconnection)
